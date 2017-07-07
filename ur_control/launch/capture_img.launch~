@@ -1,0 +1,6 @@
+<?xml version="1.0"?>
+<launch>
+    <node pkg="ur_control" type="capture_img.py" name="capture_img"/>
+
+    <node pkg="ur_control" type="key_input.py" name="key_input"/>  
+</launch>

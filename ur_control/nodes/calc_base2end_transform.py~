@@ -1,0 +1,26 @@
+#!/usr/bin/env python  
+import rospy
+
+import math
+import tf2_ros
+import geometry_msgs.msg
+
+def fromQuat(x, y, z, w):
+    roll = math.atan2(2*(w*x+y*z), 1-2*(x*x+y*y))
+    pitch = math.asin(2*(w*y-z*x))
+    yaw = math.atan2(2*(w*z+x*y), 1-2*(y*y+z*z))
+    return roll, pitch, yaw
+
+if __name__ == '__main__':
+    rospy.init_node('end2base')
+    tfBuffer = tf2_ros.Buffer()
+    listener = tf2_ros.TransformListener(tfBuffer)
+    rate = rospy.Rate(10.0)
+    while not rospy.is_shutdown():
+        try:
+            trans = tfBuffer.lookup_transform('base', 'tool0_controller', rospy.Time())
+            print trans
+        except (tf2_ros.LookupException, tf2_ros.ConnectivityException, tf2_ros.ExtrapolationException):
+            rate.sleep()
+            continue
+

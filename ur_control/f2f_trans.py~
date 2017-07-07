@@ -1,0 +1,106 @@
+#!/usr/bin/env python2
+# -*- coding: utf-8 -*-
+"""
+Created on Thu Jun 22 15:31:14 2017
+
+@author: sjtu
+"""
+
+import rospy
+import tf2_ros
+import message_filters
+from geometry_msgs.msg import _PoseStamped
+import tf2_geometry_msgs.tf2_geometry_msgs
+import numpy as np
+from math import atan2, asin, pi,sqrt
+from End2Cam import End2Cam
+
+
+def Quat2Matrix(x, y, z, w):
+    return [[1-2*(y*y+z*z), 2*(x*y-z*w),  2*(x*z+y*w)],
+            [2*(x*y+z*w),   1-2*(x*x+z*z),2*(y*z-x*w)],
+            [2*(x*z-y*w),   2*(y*z+x*w),  1-2*(x*x+y*y)]]
+
+def fromQuat(x, y, z, w):
+    roll = atan2(2*(w*x+y*z), 1-2*(x*x+y*y))
+    pitch = asin(2*(w*y-z*x))
+    yaw = atan2(2*(w*z+x*y), 1-2*(y*y+z*z))
+    return roll, pitch, yaw
+    
+def quaternion_from_matrix(matrix):
+    """Return quaternion from rotation matrix.
+    >>> R = rotation_matrix(0.123, (1, 2, 3))
+    >>> q = quaternion_from_matrix(R)
+    >>> numpy.allclose(q, [0.0164262, 0.0328524, 0.0492786, 0.9981095])
+    True
+    """
+    q = np.empty((4, ), dtype=np.float32)
+    M = np.array(matrix, dtype=np.float32, copy=False)[:4, :4]
+    t = np.trace(M)
+    if t > M[3, 3]:
+        q[3] = t
+        q[2] = M[1, 0] - M[0, 1]
+        q[1] = M[0, 2] - M[2, 0]
+        q[0] = M[2, 1] - M[1, 2]
+    else:
+        i, j, k = 0, 1, 2
+        if M[1, 1] > M[0, 0]:
+            i, j, k = 1, 2, 0
+        if M[2, 2] > M[i, i]:
+            i, j, k = 2, 0, 1
+        t = M[i, i] - (M[j, j] + M[k, k]) + M[3, 3]
+        q[i] = t
+        q[j] = M[i, j] + M[j, i]
+        q[k] = M[k, i] + M[i, k]
+        q[3] = M[k, j] - M[j, k]
+    q *= 0.5 / sqrt(t * M[3, 3])
+    return q
+    
+class PoseDrawer:
+    def __init__(self):
+        self.point_sub_ = rospy.Subscriber("camera_pose_stamped", _PoseStamped.PoseStamped, self.msgCallback, queue_size=1) 
+        self.target_frame = "world"                                             
+        self.buffer_ = tf2_ros.Buffer()                                        
+        self.tf2_ = tf2_ros.TransformListener(self.buffer_)
+        #self.point_sub_.registerCallback(self.msgCallback)
+        self.c2e = np.linalg.inv(End2Cam())
+        
+    def msgCallback(self, point_data):
+        point_out = _PoseStamped.PoseStamped()
+        point_data.pose.position.x += 0.0
+        pos_in_obj = point_data.pose.position
+        print pos_in_obj
+        ori_in_obj = point_data.pose.orientation
+        r,p,y = fromQuat(ori_in_obj.x, ori_in_obj.y,ori_in_obj.z,ori_in_obj.w)
+        print r/pi*180,p/pi*180,y/pi*180
+        #self.buffer_.registration.print_me()
+        #point_data = _TransformStamped.TransformStamped(point_data)
+        #point_data.header.frame_id = point_data.header.frame_id[1:]
+        #print point_data.header.frame_id
+        try:
+            point_out = self.buffer_.transform(point_data, self.target_frame, timeout=rospy.Duration(1.0))
+            #trans = self.buffer_.lookup_transform(self.target_frame,'turtle2', rospy.Time())
+#            rospy.INFO("point of turtle 3 in frame of turtle 1 Position(x:{} y:{} z:{}) \n".format(
+#                       point_out.point.x,
+#                       point_out.point.y,
+#                       point_out.point.z))
+            pos = point_out.pose.position
+            ori = point_out.pose.orientation
+
+            Hw2cam = np.zeros([4,4], np.float32)
+            Hw2cam[:3,:3] = Quat2Matrix(ori.x, ori.y, ori.z, ori.w)
+            Hw2cam[:3,3] = np.array([pos.x, pos.y, pos.z])
+            Hw2cam[3,3] = 1.0
+            Hw2end = np.dot(Hw2cam, self.c2e)
+            print "quat of end = "
+            print quaternion_from_matrix(Hw2end)
+            #print Hw2end
+        except (tf2_ros.LookupException, tf2_ros.ConnectivityException, tf2_ros.ExtrapolationException),e:
+            rospy.WARN("Failure {}\n".format(e) )
+            #pass
+#       return
+            
+if __name__ == '__main__':
+    rospy.init_node("pose_drawer")
+    pd = PoseDrawer()
+    rospy.spin()

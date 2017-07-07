@@ -1,0 +1,48 @@
+<?xml version="1.0"?>
+<launch>
+    <arg name="robot_ip" default="192.168.0.2"/>
+    <arg name="limited" default="true"/>
+    <arg name="config" default="true"/>  
+    <!--
+        ur10 bring_up
+    -->
+    <include file="$(find ur_modern_driver)/launch/ur10_bringup.launch">
+      <arg name="robot_ip" value="$(arg robot_ip)"/>
+      <arg name="limited" value="$(arg limited)"/>
+    </include>
+    <!--
+        ur10 moveit
+    -->    
+    <include file="$(find ur10_moveit_config)/launch/ur10_moveit_planning_execution.launch">
+      <arg name="limited" value="$(arg limited)"/>  
+    </include>
+    <!--
+        ur10 moveit rviz
+    -->  
+    <include file="$(find ur10_moveit_config)/launch/moveit_rviz.launch">
+      <arg name="config" value="$(arg config)"/>  
+    </include>
+    <!--
+        realsense start
+    -->  
+    <include file="$(find realsense_camera)/launch/sr300_nodelet_rgbd.launch"/>
+    <!--
+        add realsense camera frame
+        broadcast the camera_frame
+    -->
+    <node pkg="ur_control" type="camera_frame.py" name="camera_frame"/>
+    <!--
+        realsense distance estimate
+        broadcast the object_frame
+    -->
+    <node pkg="ur_control" type="distance_calc.py" name="distance_estimate"/> 
+     <!--
+        calculate the transform from world to object,modify the pose of object
+        and broadcast the object pose wrt. world
+    -->
+    <node pkg="ur_control" type="pub_object_pose.py" name="object_pose"/>
+     <!--
+        calculate the transform from object to camera and broadcast the camera pose wrt. object
+    -->
+    <node pkg="ur_control" type="pub_object2camera_pose" name="object2camera"/>
+</launch>

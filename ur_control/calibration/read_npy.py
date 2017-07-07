@@ -1,0 +1,8 @@
+#!/usr/bin/env python
+import numpy as np
+import sys
+
+if __name__ == '__main__':
+	#c=sys.argv[0]
+	result=np.load("1.npy")
+	print result.max()
